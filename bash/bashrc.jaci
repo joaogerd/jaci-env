@@ -1,0 +1,191 @@
+# =====================================================================
+# JACI BASHRC
+# Ambiente limpo, previsível e focado em HPC
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# 0) Só para shell interativo
+# ---------------------------------------------------------------------
+[[ -z "${PS1:-}" ]] && return
+
+# ---------------------------------------------------------------------
+# 1) Logging (usa teu __helpers__.sh se existir)
+# ---------------------------------------------------------------------
+# Onde você guardou o helpers
+JACI_LOGGING="${HOME}/.jaci/logging.sh"
+
+# Config do logger (teu helpers respeita isso)
+export LOG_TAG="JACI"
+export LOG_TIMESTAMPS="${LOG_TIMESTAMPS:-0}"
+export COLOR="${COLOR:-1}"
+export verbose="${verbose:-false}"   # INFO/OK/ACTION só aparecem se verbose=true (a menos que -f)
+export debug="${debug:-false}"
+export dry_run=false
+
+if [[ -f "$JACI_LOGGING" ]]; then
+  # shellcheck disable=SC1090
+  source "$JACI_LOGGING"
+else
+  # Fallback mínimo (caso helpers não exista ainda)
+  _log_info() { printf '[INFO] '; printf "$@"; printf '\n'; }
+  _log_warn() { printf '[WARN] '; printf "$@"; printf '\n' >&2; }
+  _log_err()  { printf '[ERROR] '; printf "$@"; printf '\n' >&2; }
+  _log_ok()   { printf '[OK] '; printf "$@"; printf '\n'; }
+fi
+
+# ---------------------------------------------------------------------
+# 2. Segurança básica do shell
+# ---------------------------------------------------------------------
+set -o noclobber
+
+# ---------------------------------------------------------------------
+# 3. Limpeza de heranças perigosas
+#    (evita conflitos silenciosos em HPC)
+# ---------------------------------------------------------------------
+unset PYTHONPATH
+unset LD_LIBRARY_PATH
+
+# Evita autoativação do conda base (se existir)
+export CONDA_AUTO_ACTIVATE_BASE=false
+
+# ---------------------------------------------------------------------
+# 4. Ambiente de módulos
+# ---------------------------------------------------------------------
+# Começa sempre limpo; o job PBS decide o que carregar
+if command -v module >/dev/null 2>&1; then
+  module purge >/dev/null 2>&1 || true
+fi
+
+# ---------------------------------------------------------------------
+# 4. Workspace JACI (onde o trabalho REAL acontece)
+# ---------------------------------------------------------------------
+# Grupo institucional
+export GROUP="monan_das"
+
+# Diretório de trabalho por usuário
+export JACI_WORKDIR="/p/projetos/${GROUP}/${USER}"
+
+# Cria estrutura mínima se não existir (primeiro login)
+if [[ "${JACI_ENV:-0}" == "1" ]]; then
+  if [[ ! -d "$JACI_WORKDIR" ]]; then
+    if mkdir -p "$JACI_WORKDIR"/{src,run,data,output,env,logs} 2>/dev/null; then
+      _log_info -f "Workspace criado: %s" "$JACI_WORKDIR"
+    else
+      _log_err "Falha ao criar workspace: %s (verifique permissões do projeto %s)" "$JACI_WORKDIR" "$GROUP"
+    fi
+  fi
+
+  if [[ -d "$JACI_WORKDIR" ]]; then
+    builtin cd "$JACI_WORKDIR" || _log_err "Falha ao entrar no workspace: %s" "$JACI_WORKDIR"
+  else
+    _log_err "Workspace não acessível: %s" "$JACI_WORKDIR"
+  fi
+fi
+
+# ---------------------------------------------------------------------
+# 6. Prompt explícito
+#    (para nunca confundir HOME com workspace)
+# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# Prompt JACI colorido e inteligente (workspace-aware)
+# ---------------------------------------------------------------------
+
+# Cores ANSI seguras
+CLR_RESET="\[\e[0m\]"
+CLR_RED="\[\e[31m\]"
+CLR_GREEN="\[\e[32m\]"
+CLR_YELLOW="\[\e[33m\]"
+CLR_BLUE="\[\e[34m\]"
+CLR_MAGENTA="\[\e[35m\]"
+CLR_CYAN="\[\e[36m\]"
+CLR_GRAY="\[\e[90m\]"
+
+# Detecta tipo de nó
+jaci_node_type() {
+  [[ -n "$PBS_JOBID" ]] && echo "COMPUTE" || echo "LOGIN"
+}
+
+
+# Função para path relativo ao workspace JACI
+jaci_pwd() {
+  local wd="${JACI_WORKDIR%/}"  # remove barra final
+  local p="$PWD"
+
+  if [[ "$p" == "$wd" ]]; then
+    echo "~"
+  elif [[ "$p" == "$wd/"* ]]; then
+    echo "${p#"$wd"/}"
+  else
+    echo "$p"
+  fi
+}
+
+
+# Prompt
+# Prompt dinâmico (sem ANSI em funções!)
+if [[ -n "$PBS_JOBID" ]]; then
+  # COMPUTE NODE → vermelho
+  PS1="${CLR_RED}[JACI-\$(jaci_node_type)${CLR_GRAY}:${CLR_CYAN}\h${CLR_GRAY} ${CLR_GREEN}\$(jaci_pwd)${CLR_RED}]${CLR_RESET}\$ "
+else
+  # LOGIN NODE → azul
+  PS1="${CLR_BLUE}[JACI-\$(jaci_node_type)${CLR_GRAY}:${CLR_CYAN}\h${CLR_GRAY} ${CLR_GREEN}\$(jaci_pwd)${CLR_BLUE}]${CLR_RESET}\$ "
+fi
+
+# ---------------------------------------------------------------------
+# 7. Aliases seguros (qualidade de vida)
+# ---------------------------------------------------------------------
+alias ll='ls -lah'
+alias ls='ls --color=auto'
+
+# Atalho explícito para o HOME (quando realmente precisar)
+alias home='cd ~'
+
+# ---------------------------------------------------------------------
+# 8. Aviso de segurança
+# ---------------------------------------------------------------------
+# Se cair no HOME por engano, avisa claramente
+jaci_home_warning() {
+  if [[ "${JACI_ENV:-0}" == "1" && "$PWD" == "$HOME" ]]; then
+    _log_warn "Você está no HOME real no JACI"
+    _log_warn "Evite trabalhar aqui (use /p)"
+    _log_info -f "Workspace correto: %s" "$JACI_WORKDIR"
+  fi
+}
+PROMPT_COMMAND="jaci_home_warning"
+
+if [[ -n "$PBS_JOBID" && -z "${JACI_COMPUTE_WARNED:-}" ]]; then
+  export JACI_COMPUTE_WARNED=1
+  _log_warn "Shell em COMPUTE NODE (PBS_JOBID=$PBS_JOBID)"
+  _log_info -f "Use apenas para execução do job"
+fi
+
+# ---------------------------------------------------------------------
+# 9. cd inteligente no JACI
+# ---------------------------------------------------------------------
+# - cd        -> JACI_WORKDIR
+# - cd ~      -> HOME real
+# - cd <path> -> comportamento normal
+# ---------------------------------------------------------------------
+
+cd() {
+  # Apenas no JACI
+  if [[ "$JACI_ENV" == "1" ]]; then
+    # cd sem argumentos
+    if [[ "$#" -eq 0 ]]; then
+      builtin cd "$JACI_WORKDIR" || return
+      return
+    fi
+  fi
+
+  # Comportamento padrão
+  builtin cd "$@"
+}
+
+# ---------------------------------------------------------------------
+# 10) Banner curto (uma vez por sessão)
+# ---------------------------------------------------------------------
+if [[ -z "${JACI_BASHRC_LOADED:-}" ]]; then
+  export JACI_BASHRC_LOADED=1
+  _log_info -f "Shell JACI pronto (workspace=%s)" "$JACI_WORKDIR"
+fi
+
