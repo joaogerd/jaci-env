@@ -32,7 +32,7 @@ Nada aqui remove arquivos do usuário.
 ## 🚀 Instalação Rápida (Recomendada)
 
 ```bash
-git clone <repo_interno> jaci-env
+git clone https://github.com/joaogerd/jaci-env.git
 cd jaci-env
 bash setup_jaci.sh
 ````
