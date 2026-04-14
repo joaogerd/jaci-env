@@ -13,7 +13,7 @@ Nada aqui remove arquivos do usuário.
 
 ---
 
-## 📁 Estrutura do Ambiente
+## Estrutura do Ambiente
 
 ### HOME real (corporativo)
 - `/home2/usuario`
@@ -29,7 +29,7 @@ Nada aqui remove arquivos do usuário.
 
 ---
 
-## 🚀 Instalação Rápida (Recomendada)
+## Instalação Rápida (Recomendada)
 
 ```bash
 git clone https://github.com/joaogerd/jaci-env.git
@@ -46,7 +46,7 @@ ssh usuario@jaci.cptec.inpe.br
 
 ---
 
-## 🧠 Modos de Instalação
+## Modos de Instalação
 
 ### 🔹 Modo padrão (seguro)
 
@@ -55,7 +55,7 @@ ssh usuario@jaci.cptec.inpe.br
 * Cria `.bashrc.jaci`
 * Configura workspace em `/p`
 
-👉 **Recomendado para a maioria dos usuários**
+**Recomendado para a maioria dos usuários**
 
 ### 🔹 Modo avançado (isolamento total)
 
@@ -65,7 +65,7 @@ ssh usuario@jaci.cptec.inpe.br
 
 ---
 
-## 🔁 Rollback
+## Rollback
 
 Cada etapa gera um script de rollback automático:
 
@@ -81,7 +81,7 @@ Rollback é:
 
 ---
 
-## ⚠️ Requisitos
+## Requisitos
 
 * Acesso ao JACI
 * Projeto válido em `/p/projetos/monan_das`
@@ -89,7 +89,7 @@ Rollback é:
 
 ---
 
-## 📌 Boas práticas no JACI
+## Boas práticas no JACI
 
 * ❌ Não execute cargas pesadas no login
 * ❌ Não rode jobs a partir do `$HOME`
@@ -99,7 +99,7 @@ Rollback é:
 
 ---
 
-## 📞 Suporte
+## Suporte
 
 Em caso de dúvida:
 
